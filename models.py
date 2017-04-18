@@ -9,13 +9,14 @@ class Thread(Model):
 
     id = IntegerField(primary_key=True)
     uid = StringField(ddl='varchar(20)')
-    name = StringField(ddl='varchar(20)')
+    name = StringField(ddl='varchar(50)')
     email = StringField(ddl='varchar(20)')
-    title = StringField(ddl='varchar(50)')
+    title = StringField(ddl='varchar(100)')
     forum = IntegerField()
     content = TextField()
-    image = StringField(ddl='varchar(50)')
+    image = StringField(ddl='varchar(80)')
     created_at = DateField()
+    updated_at = DateField()
 
 
 class Reply(Model):
@@ -24,10 +25,11 @@ class Reply(Model):
     id = IntegerField(primary_key=True)
     parent = IntegerField()
     uid = StringField(ddl='varchar(20)')
-    name = StringField(ddl='varchar(20)')
+    name = StringField(ddl='varchar(50)')
     email = StringField(ddl='varchar(20)')
-    title = StringField(ddl='varchar(50)')
+    title = StringField(ddl='varchar(100)')
     forum = IntegerField()
     content = TextField()
-    image = StringField(ddl='varchar(50)')
+    image = StringField(ddl='varchar(80)')
     created_at = DateField()
+    updated_at = DateField()

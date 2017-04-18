@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import logging
 from datetime import datetime
 
 import aiopg
 
-from log import log_info
-
+LOGGER = logging.getLogger(__name__)
 
 async def create_pool(loop, **kw):
-    log_info.info('create database connection pool...')
+    LOGGER.info('create database connection pool...')
     global __pool
     __pool = await aiopg.create_pool(user=kw['user'],
                                      password=kw['password'],
@@ -21,14 +21,14 @@ async def create_pool(loop, **kw):
                                      maxsize=kw.get('maxsize', 10),
                                      loop=loop)
 
-async def destroy_pool():
+async def close_pool():
     global __pool
     if __pool is not None:
         __pool.close()
         await __pool.wait_closed()
 
 async def select(sql, args, size=None):
-    log_info.info(sql)
+    LOGGER.info(sql)
     global __pool
     async with __pool.acquire() as conn:
         async with conn.cursor() as cur:
@@ -40,8 +40,8 @@ async def select(sql, args, size=None):
             return await rs
 
 async def execute(sql, args, autocommit=True):
-    log_info.info(sql)
-    log_info.info(args)    
+    LOGGER.info(sql)
+    LOGGER.info(args)    
     async with __pool.acquire() as conn:
         if not autocommit:
             await conn.begin()
@@ -113,13 +113,13 @@ class ModelMetaclass(type):
         if name == 'Model':
             return type.__new__(cls, name, bases, attrs)
         tableName = attrs.get('__table__', None) or name
-        log_info.info('found model: %s (table: %s)' % (name, tableName))
+        LOGGER.info('found model: %s (table: %s)' % (name, tableName))
         mappings = dict()
         fields = []
         primaryKey = None
         for k, v in attrs.items():
             if isinstance(v, Field):
-                log_info.info(' found mapping: %s ==> %s' % (k, v))
+                LOGGER.info(' found mapping: %s ==> %s' % (k, v))
                 mappings[k] = v
                 if v.primary_key:
                     if primaryKey:
@@ -176,7 +176,7 @@ class Model(dict, metaclass=ModelMetaclass):
             if field.default is not None:
                 value = field.default() if callable(field.default) \
                         else field.default
-                log_info.info('using default value for %s: %s' % (
+                LOGGER.info('using default value for %s: %s' % (
                         key, str(value)))
                 setattr(self, key, value)
         return value
@@ -231,17 +231,17 @@ class Model(dict, metaclass=ModelMetaclass):
         args.append(self.getValueOrDefault(self.__primary_key__))
         rows = await execute(self.__insert__, args)
         if rows != 1:
-            log_info.warn('failed to insert record: affected row: %s' % rows)
+            LOGGER.warn('failed to insert record: affected row: %s' % rows)
 
     async def update(self):
         args = list(map(self.getValue, self.__fields__))
         args.append(self.getValue(self.__primary_key__))
         rows = await execute(self.__update__, args)
         if rows != 1:
-            log_info.warn('failed to update: affected rows: %s' % rows)
+            LOGGER.warn('failed to update: affected rows: %s' % rows)
 
     async def remove(self):
         args = [self.getValue(self.__primary_key__)]
         rows = await execute(self.__delete__, args)
         if rows != 1:
-            log_info.warn('failed to delete: affected rows: %s' % rows)
+            LOGGER.warn('failed to delete: affected rows: %s' % rows)

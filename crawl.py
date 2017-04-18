@@ -12,15 +12,16 @@ from datetime import datetime
 
 import aiohttp
 
-# import orm
-from log import log_info
-# from models import Thread, Reply
+import orm
+from models import Thread, Reply
+
+from test_logging import log_info
 
 THREADS_URL = 'http://h.koukuko.com/api/{}?page={}'
 REPLYS_URL = 'http://h.koukuko.com/api/t/{}?page={}'
 IMAGE_URL = 'http://static.kukuku.cc/{}'
-FORUM_TYPE = ['综合版1', '询问2']
-IMAGE_FOLDER = 'static'
+FORUM_TYPE = ['询问2']
+IMAGE_FOLDER = os.path.join(sys.path[0], 'static')
 DB_SETTING = {
     'user': 'postgres',
     'password': '8523',
@@ -67,40 +68,47 @@ class Crawler:
         return img_name
 
     async def save_db(self, item):
-        if item['image']:
-            print('download image: ', item['image'])
-            await self.image_download(item['image'])
         item['created_at'] = datetime.fromtimestamp(item['createdAt'] / 1000)
-        # if item.get('parent'):
-        #     r = Reply(**item)
-        # else:
-        #     r = Thread(**item)
-        # try:
-        #     await r.save()
-        # except Exception as e:
-        #     LOGGER.error('save database error: %r', e)
+        item['updated_at'] = datetime.fromtimestamp(item['updatedAt'] / 1000)
+        if item.get('parent'):
+            r = Reply(**item)
+        else:
+            r = Thread(**item)
+        try:
+            await r.save()
+        except Exception as e:
+            log_info.error(item)
+            log_info.error('save database error: %r', e)
 
-    async def parse_link(self, response):
+    async def parse_thread_link(self, response):
         links = set()
         next_url = None
         body = await response.json()
 
         if response.status == 200:
-            max_pages = body['page']['size']
-            location_page = body['page']['page']
-            if body.get('replys') is not None:
-                for reply in body['replys']:
-                    await self.save_db(reply)
-                    # pass
-            else:
-                for thread in body['data']['threads']:
-                    link = REPLYS_URL.format(thread['id'], 1)
-                    links.add(link)
-                    await self.save_db(thread)
-            if location_page < max_pages:
+            for thread in body['data']['threads']:
+                pages = (thread['replyCount'] + 19) // 20
+                urls = [REPLYS_URL.format(thread['id'], i)
+                        for i in range(pages, 0, -1)]
+                if urls:
+                    LOGGER.info('got %r urls from %r', len(urls), response.url)
+                links.update(urls)
+                await self.save_db(thread)
+
+            size = body['page']['size']
+            location = body['page']['page']
+            if location < size:
                 url = response.url.with_query(None)
-                next_url = '{}?page={}'.format(url, location_page + 1)
-        return next_url, links
+                next_url = '{}?page={}'.format(url, location + 1)
+
+        return links, next_url
+
+    async def parse_reply_link(self, response):
+        body = await response.json()
+
+        if response.status == 200:
+            for reply in body['replys']:
+                await self.save_db(reply)
 
     async def fetch(self, url, max_redirect):
         print('fetch url: %s' % url)
@@ -130,14 +138,17 @@ class Crawler:
                     LOGGER.error('redirect limit reached from %r from %r', 
                                  redirect_url, url)
             else:
-                next_url, links = await self.parse_link(response)
-                if next_url in self.seen_urls:
-                    return
-                if next_url is not None:
-                    self.add_url(next_url)
-                for link in links.difference(self.seen_urls):
-                    self.q.put_nowait((link, self.max_redirect))
-                self.seen_urls.update(links)
+                if 'h.koukuko.com/api/t/' not in url:
+                    links, next_url = await self.parse_thread_link(response)
+                    if next_url in self.seen_urls:
+                        return
+                    if next_url is not None:
+                        self.add_url(next_url)
+                    for link in links.difference(self.seen_urls):
+                        self.q.put_nowait((link, self.max_redirect))
+                    self.seen_urls.update(links)
+                else:
+                    await self.parse_reply_link(response)
         finally:
             await response.release()
 
@@ -159,7 +170,7 @@ class Crawler:
         self.q.put_nowait((url, max_redirect))
 
     async def crawl(self):
-        # await orm.create_pool(loop=self.loop, **DB_SETTING)
+        await orm.create_pool(loop=self.loop, **DB_SETTING)
         workers = [asyncio.Task(self.work(), loop=self.loop)
                    for _ in range(self.max_tasks)]
         self.t0 = time.time()
@@ -167,7 +178,7 @@ class Crawler:
         self.t1 = time.time()
         for w in workers:
             w.cancel()
-        # await orm.destroy_pool()
+        # await orm.close_pool()
 
 
 if __name__ == '__main__':
