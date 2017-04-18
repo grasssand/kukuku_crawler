@@ -20,7 +20,8 @@ from test_logging import log_info
 THREADS_URL = 'http://h.koukuko.com/api/{}?page={}'
 REPLYS_URL = 'http://h.koukuko.com/api/t/{}?page={}'
 IMAGE_URL = 'http://static.kukuku.cc/{}'
-FORUM_TYPE = ['询问2']
+FORUM_TYPE = ['综合版1']
+MAX_PAGES = None
 IMAGE_FOLDER = os.path.join(sys.path[0], 'static')
 DB_SETTING = {
     'user': 'postgres',
@@ -97,8 +98,9 @@ class Crawler:
 
             size = body['page']['size']
             location = body['page']['page']
-            if location < size:
-                url = response.url.with_query(None)
+            url = response.url.with_query(None)
+            if (location < min(size, MAX_PAGES) 
+                    if isinstance(MAX_PAGES, int) else size):
                 next_url = '{}?page={}'.format(url, location + 1)
 
         return links, next_url
