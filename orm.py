@@ -17,15 +17,15 @@ async def create_pool(loop, **kw):
                                      database=kw['database'],
                                      host=kw.get('host', 'localhost'),
                                      port=kw.get('port', 5432),
+                                     client_encoding=kw.get('encoding', 'utf8'),
                                      minsize=kw.get('minsize', 1),
                                      maxsize=kw.get('maxsize', 10),
                                      loop=loop)
 
 async def close_pool():
     global __pool
-    if __pool is not None:
-        __pool.close()
-        await __pool.wait_closed()
+    __pool.close()
+    await __pool.wait_closed()
 
 async def select(sql, args, size=None):
     LOGGER.info(sql)
@@ -36,12 +36,14 @@ async def select(sql, args, size=None):
             if size:
                 rs = await cur.fetchmany(size)
             else:
-                rs = await cur.fetall()
-            return await rs
+                rs = await cur.fetchall()
+            r = [dict(zip([column[0] for column in cur.description], row)) 
+                 for row in rs]
+            return r
 
 async def execute(sql, args, autocommit=True):
     LOGGER.info(sql)
-    LOGGER.info(args)    
+    global __pool
     async with __pool.acquire() as conn:
         if not autocommit:
             await conn.begin()
@@ -123,13 +125,13 @@ class ModelMetaclass(type):
                 mappings[k] = v
                 if v.primary_key:
                     if primaryKey:
-                        raise Exception('Duplicate primary key for field: \
+                        raise BaseException('Duplicate primary key for field: \
                                             %s' % k)
                     primaryKey = k
                 else:
                     fields.append(k)
         if not primaryKey:
-            raise Exception('Primary key not found.')
+            raise BaseException('Primary key not found.')
         for k in mappings.keys():
             attrs.pop(k)
         escaped_fields = list(map(lambda f: '"%s"' % f, fields))
