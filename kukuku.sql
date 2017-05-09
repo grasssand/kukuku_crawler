@@ -1,15 +1,15 @@
 drop table threads;
 create table threads (
     id integer,
-    uid character varying(20),
-    name character varying(50),
-    email character varying(50),
-    title character varying(200),
-    forum integer,
+    uid varchar(50),
+    name varchar(50),
+    email varchar(50),
+    title varchar(200),
+    forum smallint,
     content text,
-    image character varying(100),
-    created_at timestamp without time zone,
-    updated_at timestamp without time zone,
+    image varchar(100),
+    created_at timestamp,
+    updated_at timestamp,
     primary key (id)
 );
 
@@ -17,14 +17,14 @@ drop table replys;
 create table replys (
     id integer,
     parent integer,
-    uid character varying(20),
-    name character varying(50),
-    email character varying(50),
-    title character varying(200),
-    forum integer,
+    uid varchar(50),
+    name varchar(50),
+    email varchar(50),
+    title varchar(200),
+    forum smallint,
     content text,
-    image character varying(100),
-    created_at timestamp without time zone,
-    updated_at timestamp without time zone,
+    image varchar(100),
+    created_at timestamp,
+    updated_at timestamp,
     primary key (id)
 );
